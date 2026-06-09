@@ -1,0 +1,46 @@
+services:
+  mlflow-postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow
+      POSTGRES_DB: mlflow
+    volumes:
+      - mlflow-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "mlflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+    networks:
+      - poom-network
+
+  mlflow-server:
+    image: ghcr.io/poomsaengpoomsa/poom-mlflow:latest
+    environment:
+      - MLFLOW_SERVER_DISABLE_HOST_VALIDATION=true
+      - MLFLOW_SERVER_CORS_ALLOWED_ORIGINS=*
+      - MLFLOW_SERVER_ALLOWED_HOSTS=*
+      - MLFLOW_HTTP_REQUEST_TIMEOUT=600
+      - MLFLOW_BACKEND_STORE_URI=${MLFLOW_DATABASE_URI}
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=${MLFLOW_ARTIFACTS_BUCKET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+    ports:
+      - "5002:5000"
+    depends_on:
+      mlflow-postgres:
+        condition: service_healthy
+    restart: always
+    networks:
+      - poom-network
+
+networks:
+  poom-network:
+    name: poom-network
+    driver: bridge
+
+volumes:
+  mlflow-db-volume:
