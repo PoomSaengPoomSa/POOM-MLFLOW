@@ -1,35 +1,43 @@
 name: Deploy POOM-MLFLOW
-
 on:
   push:
     branches:
       - main
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
-
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: ghcr.io/poomsaengpoomsa/poom-mlflow:latest
-
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Copy docker-compose to MLflow server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.MLFLOW_SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          proxy_host: ${{ secrets.BASTION_HOST }}
+          proxy_username: ${{ secrets.SERVER_USER }}
+          proxy_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose-mlflow.yml"
+          target: "/opt/mlflow"
       - name: Deploy to MLflow server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -42,5 +50,5 @@ jobs:
           command_timeout: 30m
           script: |
             cd /opt/mlflow
-            docker compose --env-file .env pull mlflow-server
-            docker compose --env-file .env up -d
+            docker compose -f docker-compose-mlflow.yml --env-file .env pull mlflow-server
+            docker compose -f docker-compose-mlflow.yml --env-file .env up -d
